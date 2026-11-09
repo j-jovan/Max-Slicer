@@ -1,7 +1,7 @@
 {
   "name": "max-slicer",
-  "version": "1.0.0",
-  "description": "Resin slicer for the Anycubic Photon Mono M7 Max",
+  "version": "1.1.0",
+  "description": "Resin slicer for the Anycubic Photon Mono M7 Max and Elegoo Saturn 4 Ultra 16K",
   "main": "src/main/main.js",
   "scripts": {
     "test": "node test/run-all.js",
@@ -26,7 +26,7 @@
   "build": {
     "appId": "rs.jovanovic.m7maxslicer",
     "productName": "Max Slicer",
-    "copyright": "Jovan Jovanović",
+    "copyright": "Jovan Jovanovi\u0107",
     "directories": {
       "output": "release"
     },
@@ -63,6 +63,11 @@
         {
           "ext": "m7proj",
           "name": "Max Slicer project"
+        },
+        {
+          "ext": "goo",
+          "name": "Elegoo GOO print file",
+          "description": "Elegoo Saturn 4 Ultra 16K print file"
         }
       ]
     },

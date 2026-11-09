@@ -30,9 +30,10 @@ export function layerTime(p, k, accel = 0) {
   return wb + exp + wa + motion + wl;
 }
 
-export function printTime(p, layerCount, accel = 0) {
+// overhead: fixed seconds per layer the firmware adds (e.g. a tilting vat)
+export function printTime(p, layerCount, accel = 0, overhead = 0) {
   let t = 0;
-  for (let k = 0; k < layerCount; k++) t += layerTime(p, k, accel);
+  for (let k = 0; k < layerCount; k++) t += layerTime(p, k, accel) + overhead;
   return t;
 }
 

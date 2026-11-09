@@ -7,7 +7,7 @@ import { buildZip, readZip, packEntry } from './zip.js';
 import { decodePW0 } from './pw0.js';
 
 export const APP_MARK = 'Max Slicer';
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.1.0';
 
 const te = new TextEncoder();
 const json = (o) => te.encode(JSON.stringify(o, null, '\t').replace(/\n/g, '\r\n'));
@@ -17,15 +17,13 @@ export function layerExposure(profile, k) {
   return k < profile.bottomLayers ? profile.bottomExposure : profile.exposure;
 }
 
-// Exposure the firmware will actually apply when it honours transition layers
-// (UVtools' linear rule). Used for time estimates only.
+// Exposure per layer including transition layers, by the rule Lychee writes into
+// .goo files (linear steps, the last transition layer already at normal exposure).
+// Used for time estimates.
 export function effectiveExposure(profile, k) {
   const b = profile.bottomLayers, t = profile.transitionLayers | 0;
   if (k < b) return profile.bottomExposure;
-  if (t > 0 && k < b + t) {
-    const dec = (profile.bottomExposure - profile.exposure) / (t + 1);
-    return profile.bottomExposure - dec * (k - b + 1);
-  }
+  if (t > 0 && k < b + t) return profile.bottomExposure - ((profile.bottomExposure - profile.exposure) * (k - b + 1)) / t;
   return profile.exposure;
 }
 

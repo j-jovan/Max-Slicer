@@ -5,7 +5,8 @@ import { Viewer, COLORS } from './viewer.js';
 import { ComputeWorker } from './pool.js';
 import { h, num, row, select, check, btn, icon, fmt } from './dom.js';
 import { t, setLang, getLang } from './i18n.js';
-import { M7MAX, DEFAULT_PROFILE } from '../core/printer.js';
+import { PRINTERS, DEFAULT_PROFILE, DEFAULT_PROFILES } from '../core/printer.js';
+import { buildGOO } from '../core/goo.js';
 import { transformTris, bounds, frustum, toBinarySTL, concatTris } from '../core/mesh.js';
 import { DEFAULT_SUPPORT_SETTINGS, SUPPORT_PRESETS } from '../core/supports.js';
 import { buildPM7M } from '../core/pm7m.js';
@@ -55,7 +56,7 @@ const state = {
   hollow: { wall: 2.0, infill: { type: 'none', spacing: 6, thickness: 1.2 }, holeDiameter: 3.0, holeDepth: 0 },
   orientGoal: 'balanced',
   slice: null,              // {packed, stats, layerCount, time, volumeMl}
-  opened: null,             // opened .pm7m summary
+  opened: null,             // opened print file summary
   analysis: null,           // {islands, suction, trapped}
   xray: false,
   layerView: false,
@@ -72,6 +73,8 @@ let compute;
 let cpuCount = 4;
 
 const $ = (id) => document.getElementById(id);
+// the active printer follows the active resin profile
+const printer = () => PRINTERS[state.profile.printer] || PRINTERS.m7max;
 // replaceChildren() would turn null into the text "null"; drop empty slots first
 function put(el, ...kids) { el.replaceChildren(...kids.flat(Infinity).filter((k) => k != null && k !== false)); }
 
@@ -237,7 +240,7 @@ async function addMeshes(parts) {
 async function openFiles(files) {
   for (const f of files) {
     const ext = f.name.split('.').pop().toLowerCase();
-    if (ext === 'pm7m') { await openPrintFile(f); continue; }
+    if (ext === 'pm7m' || ext === 'goo') { await openPrintFile(f); continue; }
     if (ext === 'm7proj') { await loadProject(f); continue; }
     await task(`${t('Working…')} ${f.name}`, async () => {
       const parts = await compute.run('load', { name: f.name, buffer: f.data }, [f.data]);
@@ -295,7 +298,7 @@ function arrange(push = true) {
   if (!ms.length) return;
   if (push) pushHistory();
   const gap = 4;
-  const W = M7MAX.printW - 4, H = M7MAX.printH - 4;
+  const W = printer().printW - 4, H = printer().printH - 4;
   const items = ms.map((m) => ({ m, f: footprint(m) })).map((it) => ({ ...it, w: it.f.x1 - it.f.x0, d: it.f.y1 - it.f.y0 }));
   items.sort((a, b) => b.d - a.d || b.w - a.w);
   let x = 0, y = 0, rowH = 0;
@@ -560,13 +563,13 @@ function showMarkers() {
 // ---------------------------------------------------------------- slicing & export
 function plateProblems() {
   const out = [];
-  const w = M7MAX.printW / 2, hh = M7MAX.printH / 2;
+  const w = printer().printW / 2, hh = printer().printH / 2;
   for (const m of state.models) {
     if (m.visible === false) continue;
     const f = footprint(m);
     const b = worldBounds(m);
     if (f.x0 < -w - 0.01 || f.x1 > w + 0.01 || f.y0 < -hh - 0.01 || f.y1 > hh + 0.01) out.push({ m, msg: t('Outside the build area') });
-    if (b.max[2] > M7MAX.maxZ) out.push({ m, msg: t('Too tall for the printer') });
+    if (b.max[2] > printer().maxZ) out.push({ m, msg: t('Too tall for the printer') });
     if (b.min[2] < -0.01) out.push({ m, msg: t('Model sits below the plate') });
   }
   return out;
@@ -586,7 +589,8 @@ async function slicePlate() {
     for (const m of vis) zmax = Math.max(zmax, worldBounds(m).max[2]);
     if (g.supports.length) zmax = Math.max(zmax, bounds(g.supports).max[2]);
     const layerCount = Math.ceil(zmax / p.layerHeight - 1e-6);
-    const job = { model: g.model, supports: g.supports, cavity: g.cavity, holes: g.holes, infill: g.infill, layerHeight: p.layerHeight, aa: p.antiAliasing, blur: p.blur };
+    const pr = printer();
+    const job = { printer: pr.id, model: g.model, supports: g.supports, cavity: g.cavity, holes: g.holes, infill: g.infill, layerHeight: p.layerHeight, aa: p.antiAliasing, blur: p.blur };
     const n = Math.max(1, Math.min(8, cpuCount - 1));
     sliceWorkers = Array.from({ length: n }, () => new ComputeWorker('worker.js'));
     sliceCancel = false;
@@ -614,8 +618,8 @@ async function slicePlate() {
     }
     if (sliceCancel) throw new Error(t('Cancel'));
     const volumeMl = stats.reduce((s, x) => s + x.area, 0) * p.layerHeight / 1000;
-    const time = printTime(p, layerCount);
-    state.slice = { packed, stats, layerCount, time, volumeMl, profile: { ...p }, aa: p.antiAliasing };
+    const time = printTime(p, layerCount, 0, pr.layerOverhead);
+    state.slice = { packed, stats, layerCount, time, volumeMl, profile: { ...p }, aa: p.antiAliasing, printer: pr.id };
     state.layerIndex = Math.min(state.layerIndex, layerCount - 1);
     state.step = 'slice';
     state.layerView = true;
@@ -627,20 +631,24 @@ async function slicePlate() {
 async function exportPM7M() {
   if (!state.slice) { await slicePlate(); if (!state.slice) return; }
   const s = state.slice;
+  const pr = PRINTERS[s.printer];
   const base = (state.models.find((m) => m.visible !== false)?.name || 'print').replace(/[^\w\-. ]+/g, '_');
-  const path = await host.saveDialog(`${base}.pm7m`, [{ name: 'Anycubic Photon Mono M7 Max', extensions: ['pm7m'] }]);
+  const path = await host.saveDialog(`${base}.${pr.extension}`, [{ name: pr.name, extensions: [pr.extension] }]);
   if (!path) return;
-  await task(t('Export .pm7m'), async () => {
+  await task(`${t('Export')} .${pr.extension}`, async () => {
+    const goo = pr.format === 'goo';
     let previews;
     try {
       previews = [];
-      for (const [w, hh] of M7MAX.previewSizes) previews.push(await viewer.renderPreview(w, hh));
+      for (const [w, hh] of pr.previewSizes) previews.push(await viewer.renderPreview(w, hh, goo));
     } catch (e) {
-      console.warn('3D preview failed, using height map', e);
+      console.warn('3D preview failed, using a plain preview', e);
       const g = sceneGroups();
-      previews = M7MAX.previewSizes.map(([w, hh]) => heightmapPreview(concatTris([g.model, g.supports]), w, hh));
+      previews = pr.previewSizes.map(([w, hh]) => (goo ? { rgba: new Uint8Array(w * hh * 4), w, h: hh } : heightmapPreview(concatTris([g.model, g.supports]), w, hh)));
     }
-    const chunks = buildPM7M({ profile: s.profile, aa: s.aa, layers: s.packed, stats: s.stats, previews, printTime: s.time, volumeMl: s.volumeMl });
+    const chunks = goo
+      ? buildGOO({ printer: pr, profile: s.profile, aa: s.aa, layers: s.packed.map((x) => x.data), previews, printTime: s.time, volumeMl: s.volumeMl })
+      : buildPM7M({ profile: s.profile, aa: s.aa, layers: s.packed, stats: s.stats, previews, printTime: s.time, volumeMl: s.volumeMl });
     const r = await host.writeChunks(path, chunks);
     state.lastExport = path;
     toast(`${t('Exported')}: ${path.split(/[\\/]/).pop()} (${(r.bytes / 1048576).toFixed(1)} MB)`, { action: window.host ? { label: t('Show in folder'), fn: () => host.showInFolder(path) } : null, ms: 9000 });
@@ -661,7 +669,7 @@ async function exportSTL() {
 // ---------------------------------------------------------------- open .pm7m for inspection
 async function openPrintFile(f) {
   await task(t('Open print file'), async () => {
-    const r = await compute.run('openPM7M', { buffer: f.data }, [f.data]);
+    const r = await compute.run('openPrint', { buffer: f.data, name: f.name }, [f.data]);
     state.opened = { name: f.name, ...r };
     state.slice = null;
     state.step = 'slice';
@@ -682,7 +690,7 @@ async function showLayer(k) {
   renderLayerView();
   const req = ++layerReq;
   const res = state.slice
-    ? await compute.run('layerPreview', { packed: state.slice.packed[k], scale: 4 })
+    ? await compute.run('layerPreview', { packed: state.slice.packed[k], printer: state.slice.printer, scale: printer().resX > 10000 ? 8 : 4 })
     : await compute.run('openedLayer', { k, scale: 4 });
   if (req !== layerReq) return;
   const c = document.querySelector('canvas.layer');
@@ -697,9 +705,10 @@ async function zoomLayer(ev) {
   if (!state.slice) return;
   const c = ev.currentTarget;
   const r = c.getBoundingClientRect();
-  const x = Math.round(((ev.clientX - r.left) / r.width) * M7MAX.resX), y = Math.round(((ev.clientY - r.top) / r.height) * M7MAX.resY);
+  const pr = PRINTERS[state.slice.printer];
+  const x = Math.round(((ev.clientX - r.left) / r.width) * pr.resX), y = Math.round(((ev.clientY - r.top) / r.height) * pr.resY);
   const w = 300, hh = 200;
-  const res = await compute.run('layerCrop', { packed: state.slice.packed[state.layerIndex], x0: x - w / 2, y0: y - hh / 2, w, h: hh });
+  const res = await compute.run('layerCrop', { packed: state.slice.packed[state.layerIndex], printer: state.slice.printer, x0: x - w / 2, y0: y - hh / 2, w, h: hh });
   let z = document.querySelector('canvas.zoom');
   if (!z) { z = h('canvas', { class: 'zoom', title: '1:1 pixels (click to close)', onclick: () => z.remove() }); c.parentElement.append(z); }
   z.width = w; z.height = hh; z.style.width = `${w}px`; z.style.height = `${hh}px`;
@@ -734,7 +743,8 @@ async function loadProject(f) {
     pushHistory();
     for (const m of state.models) viewer.removeModel(m.id);
     state.models = [];
-    Object.assign(state.profile, pj.profile); Object.assign(state.support, pj.support); Object.assign(state.hollow, pj.hollow);
+    Object.assign(state.profile, { printer: 'm7max' }, pj.profile); Object.assign(state.support, pj.support); Object.assign(state.hollow, pj.hollow);
+    viewer.setPrinter(printer());
     for (const pm of pj.models) {
       const bin = z[`meshes/${pm.id}.bin`];
       const m = { ...pm, id: nextId++, tris: new Float32Array(bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength)), supportGeo: null, cavity: null };
@@ -813,7 +823,7 @@ function setTransform(mode) {
 function toggleXray() { state.xray = !state.xray; viewer.setXray(state.xray, state.models); renderVtools(); }
 
 async function doOpen() {
-  const files = await host.openFiles([{ name: '3D models and print files', extensions: ['stl', 'obj', '3mf', 'pm7m', 'm7proj'] }]);
+  const files = await host.openFiles([{ name: '3D models and print files', extensions: ['stl', 'obj', '3mf', 'pm7m', 'goo', 'm7proj'] }]);
   if (files?.length) await openFiles(files);
 }
 
@@ -829,14 +839,29 @@ function renderTop() {
   const lang = h('div', { class: 'seg', role: 'group', 'aria-label': t('Language') },
     h('button', { 'aria-pressed': String(getLang() === 'en'), onclick: () => switchLang('en') }, 'EN'),
     h('button', { 'aria-pressed': String(getLang() === 'sr'), onclick: () => switchLang('sr') }, 'SR'));
-  put($('topright'), 
+  const printerSel = select(Object.values(PRINTERS).map((p) => [p.id, p.name]), printer().id, setPrinter);
+  printerSel.classList.add('printer');
+  printerSel.title = t('Printer');
+  put($('topright'),
+    printerSel,
     btn('', undo, { cls: 'ghost', ico: 'undo', title: `${t('Undo')} (Ctrl+Z)`, disabled: !history.undo.length }),
     btn('', redo, { cls: 'ghost', ico: 'redo', title: `${t('Redo')} (Ctrl+Y)`, disabled: !history.redo.length }),
     lang,
-    btn(t('Export .pm7m'), exportPM7M, { cls: 'primary', ico: 'export', disabled: !state.models.length || !!state.busy }),
+    btn(`${t('Export')} .${printer().extension}`, exportPM7M, { cls: 'primary', ico: 'export', disabled: !state.models.length || !!state.busy }),
   );
 }
 function switchLang(l) { setLang(l); saveSettings(); render(); }
+
+function setPrinter(id) {
+  if (id === state.profile.printer) return;
+  const pr = state.profiles.find((x) => x.printer === id) || { ...DEFAULT_PROFILES[id], currencyCode: 'EUR' };
+  Object.assign(state.profile, pr);
+  invalidateSlice(false);
+  viewer.setPrinter(printer());
+  saveSettings();
+  fitView();
+  render();
+}
 
 // ---------------------------------------------------------------- viewport tools
 function renderVtools() {
@@ -888,7 +913,7 @@ function renderLayerView() {
     const slider = h('input', { type: 'range', min: 0, max: count - 1, value: k, 'aria-label': t('Layer') });
     slider.addEventListener('input', () => showLayer(+slider.value));
     put(lv, 
-      h('div', { class: 'canvaswrap' }, h('div', { class: 'lbl' }, `${state.slice ? '' : state.opened.name + ' — '}LCD 6480 × 3600, mirrored as the printer shows it`), canvas),
+      h('div', { class: 'canvaswrap' }, h('div', { class: 'lbl' }, `${state.slice ? '' : state.opened.name + ' — '}LCD ${state.slice ? printer().resX : state.opened.W} × ${state.slice ? printer().resY : state.opened.H}, mirrored as the printer shows it`), canvas),
       h('div', { class: 'bar' }, btn('−', () => showLayer(state.layerIndex - 1), { cls: 'ghost' }), slider, btn('+', () => showLayer(state.layerIndex + 1), { cls: 'ghost' }), h('span', { class: 'info' }, info)),
     );
   } else {
@@ -945,16 +970,19 @@ function renderSide() {
         h('dt', {}, t('Layers')), h('dd', {}, String(s.layerCount)),
         h('dt', {}, t('Resin')), h('dd', {}, `${s.volumeMl.toFixed(1)} ml, ${(s.volumeMl * s.profile.density).toFixed(1)} g`),
         h('dt', {}, t('Cost')), h('dd', {}, `${((s.volumeMl / 1000) * s.profile.pricePerLitre).toFixed(2)} ${s.profile.currencyCode}`)),
-      btn(t('Export .pm7m'), exportPM7M, { cls: 'primary wide', ico: 'export' }));
+      btn(`${t('Export')} .${PRINTERS[s.printer].extension}`, exportPM7M, { cls: 'primary wide', ico: 'export' }));
   }
   if (state.opened) {
     const o = state.opened;
-    const sp = o.settings.machine_extern.user_resins?.[0]?.slicepara || {};
+    const sm = o.summary || {};
+    const r2 = (v) => Math.round(v * 1000) / 1000;
     kids.push(h('h3', {}, o.name), h('dl', { class: 'kv' },
+      o.machine ? [h('dt', {}, t('Printer')), h('dd', {}, o.machine)] : null,
       h('dt', {}, t('Layers')), h('dd', {}, String(o.layerCount)),
-      h('dt', {}, t('Layer height')), h('dd', {}, `${sp.zthick} mm`),
-      h('dt', {}, t('Exposure')), h('dd', {}, `${sp.exposure_time} s / ${sp.bott_time} s`),
-      o.printInfo ? [h('dt', {}, t('Print time')), h('dd', {}, formatDuration(o.printInfo.print_time)), h('dt', {}, t('Resin')), h('dd', {}, `${o.printInfo.volume} ml`)] : null,
+      h('dt', {}, t('Layer height')), h('dd', {}, `${r2(sm.layerHeight)} mm`),
+      h('dt', {}, t('Exposure')), h('dd', {}, `${r2(sm.exposure)} s / ${r2(sm.bottomExposure)} s`),
+      o.printInfo ? [h('dt', {}, t('Print time')), h('dd', {}, formatDuration(o.printInfo.print_time))] : null,
+      o.printInfo?.volume != null ? [h('dt', {}, t('Resin')), h('dd', {}, `${o.printInfo.volume} ml`)] : null,
       o.software ? [h('dt', {}, 'Slicer'), h('dd', {}, `${o.software.mark} ${o.software.version}`)] : null));
   }
   put(side, ...kids);
@@ -1088,13 +1116,15 @@ function panelSlice() {
   const set = (k) => (v) => { p[k] = v; invalidateSlice(false); saveSettings(); renderSide(); renderTop(); renderLayerView(); };
   const nrow = (f) => row(t(f.label), num(p[f.key], { unit: f.unit, min: f.min, max: f.max, step: f.step, digits: f.digits, onChange: set(f.key) }));
   const out = [h('h2', {}, t('Slice'))];
-  const names = state.profiles.map((x) => x.name);
+  // profiles belong to one printer; only this printer's are listed
+  const mine = (x) => x.printer === p.printer;
+  const names = state.profiles.filter(mine).map((x) => x.name);
   out.push(sect(t('Resin profile'),
-    select(names.map((n) => [n, n]), p.name, (v) => { const pr = state.profiles.find((x) => x.name === v); if (pr) { Object.assign(p, pr); invalidateSlice(false); saveSettings(); render(); } }),
+    select(names.map((n) => [n, n]), p.name, (v) => { const pr = state.profiles.find((x) => mine(x) && x.name === v); if (pr) { Object.assign(p, pr); invalidateSlice(false); saveSettings(); render(); } }),
     h('div', { class: 'btns' },
-      btn(t('Save profile'), () => { const i = state.profiles.findIndex((x) => x.name === p.name); const copy = { ...p }; if (i >= 0) state.profiles[i] = copy; else state.profiles.push(copy); saveSettings(); toast(t('Saved')); }),
+      btn(t('Save profile'), () => { const i = state.profiles.findIndex((x) => mine(x) && x.name === p.name); const copy = { ...p }; if (i >= 0) state.profiles[i] = copy; else state.profiles.push(copy); saveSettings(); toast(t('Saved')); }),
       btn(t('New profile'), async () => { const nm = await askText(t('Profile name'), `${p.name} copy`); if (!nm) return; const clean = nm.replace(/[^\x20-\x7e]/g, '').trim().slice(0, 40) || 'resin'; p.name = clean; state.profiles.push({ ...p }); saveSettings(); render(); }),
-      btn(t('Delete profile'), () => { if (state.profiles.length <= 1) return; state.profiles = state.profiles.filter((x) => x.name !== p.name); Object.assign(p, state.profiles[0]); saveSettings(); render(); }, { cls: 'danger' })),
+      btn(t('Delete profile'), () => { if (names.length <= 1) return; state.profiles = state.profiles.filter((x) => !(mine(x) && x.name === p.name)); Object.assign(p, state.profiles.find(mine)); saveSettings(); render(); }, { cls: 'danger' })),
   ));
   out.push(sect(t('Exposure'),
     nrow(PF('Layer height', 'layerHeight', 'mm', 0.01, 0.2, 0.01, 3)),
@@ -1115,14 +1145,14 @@ function panelSlice() {
   ));
   out.push(sect(t('Lift'),
     head(),
-    grid3(`${t('Lift height')} (mm)`, cell('bottomLiftHeight', '', 0.5, 30, 0.5, t('Lift height')), cell('liftHeight', '', 0.5, 30, 0.5, t('Lift height'))),
-    grid3(`${t('Lift speed')} (mm/s)`, cell('bottomLiftSpeed', '', 0.1, 20, 0.1, t('Lift speed')), cell('liftSpeed', '', 0.1, 20, 0.1, t('Lift speed'))),
-    grid3(`${t('Retract speed')} (mm/s)`, cell('bottomRetractSpeed', '', 0.1, 20, 0.1, t('Retract speed')), cell('retractSpeed', '', 0.1, 20, 0.1, t('Retract speed'))),
+    grid3(`${t('Lift height')} (mm)`, cell('bottomLiftHeight', '', 0, 30, 0.5, t('Lift height')), cell('liftHeight', '', 0, 30, 0.5, t('Lift height'))),
+    grid3(`${t('Lift speed')} (mm/s)`, cell('bottomLiftSpeed', '', 0, 20, 0.1, t('Lift speed')), cell('liftSpeed', '', 0, 20, 0.1, t('Lift speed'))),
+    grid3(`${t('Retract speed')} (mm/s)`, cell('bottomRetractSpeed', '', 0, 20, 0.1, t('Retract speed')), cell('retractSpeed', '', 0, 20, 0.1, t('Retract speed'))),
     check(t('Two-stage motion'), p.twoStage, (v) => { p.twoStage = v; invalidateSlice(false); saveSettings(); render(); }),
     p.twoStage ? [h('p', { class: 'note' }, t('Second stage, after the first lift distance:')), head(),
-      grid3(`${t('Lift height')} (mm)`, cell('bottomLiftHeight2', '', 0.5, 30, 0.5), cell('liftHeight2', '', 0.5, 30, 0.5)),
-      grid3(`${t('Lift speed')} (mm/s)`, cell('bottomLiftSpeed2', '', 0.1, 20, 0.1), cell('liftSpeed2', '', 0.1, 20, 0.1)),
-      grid3(`${t('Retract speed')} (mm/s)`, cell('bottomRetractSpeed2', '', 0.1, 20, 0.1), cell('retractSpeed2', '', 0.1, 20, 0.1))] : null,
+      grid3(`${t('Lift height')} (mm)`, cell('bottomLiftHeight2', '', 0, 30, 0.5), cell('liftHeight2', '', 0, 30, 0.5)),
+      grid3(`${t('Lift speed')} (mm/s)`, cell('bottomLiftSpeed2', '', 0, 20, 0.1), cell('liftSpeed2', '', 0, 20, 0.1)),
+      grid3(`${t('Retract speed')} (mm/s)`, cell('bottomRetractSpeed2', '', 0, 20, 0.1), cell('retractSpeed2', '', 0, 20, 0.1))] : null,
   ));
   out.push(sect(t('Image'),
     row(t('Anti-aliasing'), select([[1, t('Off')], [2, '2×'], [4, '4×'], [8, '8×']], p.antiAliasing, (v) => set('antiAliasing')(+v))),
@@ -1135,7 +1165,7 @@ function panelSlice() {
   ));
   out.push(h('div', { class: 'btns' },
     state.busy && sliceWorkers.length ? btn(t('Cancel'), () => { sliceCancel = true; }, { cls: 'wide' }) : btn(t('Slice plate'), slicePlate, { cls: 'primary wide', disabled: !state.models.length || !!state.busy }),
-    btn(t('Open print file'), async () => { const f = await host.openFiles([{ name: 'pm7m', extensions: ['pm7m'] }], false); if (f?.length) await openPrintFile(f[0]); }, { cls: 'wide' })));
+    btn(t('Open print file'), async () => { const f = await host.openFiles([{ name: t('Print file'), extensions: ['pm7m', 'goo'] }], false); if (f?.length) await openPrintFile(f[0]); }, { cls: 'wide' })));
   return out;
 }
 
@@ -1171,10 +1201,15 @@ async function boot() {
     if (s.hollow) Object.assign(state.hollow, s.hollow, { infill: { ...state.hollow.infill, ...(s.hollow.infill || {}) } });
     if (s.orientGoal) state.orientGoal = s.orientGoal;
   }
+  // profiles saved before printer support belong to the M7 Max
+  for (const pr of state.profiles) pr.printer ||= 'm7max';
+  state.profile.printer ||= 'm7max';
   if (!state.profiles.length) state.profiles = [{ ...state.profile }];
+  for (const id of Object.keys(PRINTERS)) if (!state.profiles.some((x) => x.printer === id)) state.profiles.push({ ...DEFAULT_PROFILES[id], currencyCode: 'EUR' });
   cpuCount = (await host.sysInfo()).cpus || 4;
   compute = new ComputeWorker('worker.js');
   viewer = new Viewer($('viewport'));
+  viewer.setPrinter(printer());
   viewer.setTransformMode(state.transformMode);
   let dragStart = null;
   viewer.onDragging = (on) => {

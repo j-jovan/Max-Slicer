@@ -3,6 +3,7 @@
 import { M7MAX } from './printer.js';
 import { prepareMesh, LayerSweeper, Rasterizer, boxBlur } from './raster.js';
 import { encodePW0 } from './pw0.js';
+import { encodeGOO } from './goo.js';
 import { packEntry } from './zip.js';
 
 export function createLayerContext(job, printer = M7MAX) {
@@ -96,7 +97,9 @@ export function renderLayer(ctx, k) {
 // Remove cavity from the model, keeping infill lattice inside it.
 function applyCavity(img, cav, cdirty, W, H, z, infill, pr) {
   const type = infill?.type || 'none';
-  const p = pr.pixelMm, hx = pr.displayW / 2, hy = pr.displayH / 2;
+  // pixel centre -> plate mm (inverse of the rasteriser mapping)
+  const px = pr.pixelX ?? pr.pixelMm, py = pr.pixelY ?? pr.pixelMm, sx = pr.sx ?? -1, sy = pr.sy ?? -1;
+  const hx = pr.displayW / 2, hy = pr.displayH / 2;
   const s = infill?.spacing || 6, t = infill?.thickness || 1;
   const ht = t / 2;
   const nearZ = type === 'cubic' ? distToGrid(z, s) < ht : false;
@@ -112,12 +115,12 @@ function applyCavity(img, cav, cdirty, W, H, z, infill, pr) {
       let keep = false;
       if (type !== 'none') {
         if (!rowReady) {
-          y = hy - (r + 0.5) * p;
+          y = sy * ((r + 0.5) * py - hy);
           nearY = distToGrid(y, s) < ht;
           Ys = Math.sin(y * kz); Yc = Math.cos(y * kz);
           rowReady = true;
         }
-        const x = hx - (c + 0.5) * p;
+        const x = sx * ((c + 0.5) * px - hx);
         if (type === 'cubic') {
           const nearX = distToGrid(x, s) < ht;
           keep = (nearX && nearY) || (nearX && nearZ) || (nearY && nearZ);
@@ -141,7 +144,7 @@ function distToGrid(a, s) {
 // millimetres in image space, offset so that the display centre is 0.
 export function finishLayer(ctx, img) {
   const { W, H, printer } = ctx;
-  const p = printer.pixelMm;
+  const px = printer.pixelX ?? printer.pixelMm, py = printer.pixelY ?? printer.pixelMm;
   const u32 = new Uint32Array(img.buffer, img.byteOffset, img.length >> 2);
   const W4 = W >> 2; // W is a multiple of 4 on this printer
   // connected components over horizontal runs (8-connectivity), union-find
@@ -194,14 +197,19 @@ export function finishLayer(ctx, img) {
   }
   let objects = 0, maxArea = 0;
   for (let i = 0; i < ids; i++) if (parent[i] === i) { objects++; if (area[i] > maxArea) maxArea = area[i]; }
-  const px2 = p * p;
+  const px2 = px * py;
   const halfW = printer.displayW / 2, halfH = printer.displayH / 2;
   const stat = objects
     ? {
         area: round4(total * px2), objects, maxArea: round4(maxArea * px2),
-        x0: round4(c0 * p - halfW), y0: round4(r0 * p - halfH), x1: round4((c1 + 1) * p - halfW), y1: round4((r1 + 1) * p - halfH),
+        x0: round4(c0 * px - halfW), y0: round4(r0 * py - halfH), x1: round4((c1 + 1) * px - halfW), y1: round4((r1 + 1) * py - halfH),
       }
     : { area: 0, objects: 0, maxArea: 0, x0: 0, y0: 0, x1: 0, y1: 0 };
+  if (printer.format === 'goo') {
+    // GOO layers are stored raw (no ZIP), already run-length encoded
+    const encoded = encodeGOO(img, W, dirty);
+    return { stat, packed: { data: encoded, size: encoded.length, raw: true }, encoded };
+  }
   const encoded = encodePW0(img, W, dirty);
   const packed = packEntry(encoded);
   return { stat, packed, encoded };

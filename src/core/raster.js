@@ -37,7 +37,11 @@ export class LayerSweeper {
     const act = this.active;
     for (let i = 0; i < act.length; i++) if (zmax[act[i]] >= z) act[w++] = act[i];
     act.length = w;
-    const halfW = this.pr.displayW / 2, halfH = this.pr.displayH / 2, ip = 1 / this.pr.pixelMm;
+    const pr = this.pr;
+    const halfW = pr.displayW / 2, halfH = pr.displayH / 2;
+    // per-axis scale with mirror sign folded in (default: M7-style mirrored X and Y)
+    const kx = (pr.sx ?? -1) / (pr.pixelX ?? pr.pixelMm), ky = (pr.sy ?? -1) / (pr.pixelY ?? pr.pixelMm);
+    const ox = halfW / (pr.pixelX ?? pr.pixelMm), oy = halfH / (pr.pixelY ?? pr.pixelMm);
     let segs = this.segs;
     let count = 0;
     for (let i = 0; i < act.length; i++) {
@@ -68,10 +72,10 @@ export class LayerSweeper {
       if (d < 0) { let t = p0x; p0x = p1x; p1x = t; t = p0y; p0y = p1y; p1y = t; }
       if (count * 4 + 4 > segs.length) { const s2 = new Float64Array(segs.length * 2); s2.set(segs); segs = this.segs = s2; }
       // mm -> pixel (mirrored X, rows toward front)
-      segs[count * 4] = (halfW - p0x) * ip;
-      segs[count * 4 + 1] = (halfH - p0y) * ip;
-      segs[count * 4 + 2] = (halfW - p1x) * ip;
-      segs[count * 4 + 3] = (halfH - p1y) * ip;
+      segs[count * 4] = ox + p0x * kx;
+      segs[count * 4 + 1] = oy + p0y * ky;
+      segs[count * 4 + 2] = ox + p1x * kx;
+      segs[count * 4 + 3] = oy + p1y * ky;
       count++;
     }
     return { segs, count };

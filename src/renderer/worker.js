@@ -10,7 +10,8 @@ import { createLayerContext, renderLayer, finishLayer } from '../core/layerjob.j
 import { readPM7M } from '../core/pm7m.js';
 import { decodePW0 } from '../core/pw0.js';
 import { inflateSync } from 'fflate';
-import { M7MAX } from '../core/printer.js';
+import { PRINTERS } from '../core/printer.js';
+import { decodeGOO, readGOO } from '../core/goo.js';
 
 let sliceCtx = null;
 let sliceJob = null;
@@ -81,7 +82,7 @@ const handlers = {
   },
   sliceChunk({ k0, k1 }) {
     // fresh sweeper per chunk (sweeps are monotonic in z)
-    sliceCtx = createLayerContext(sliceJob, M7MAX);
+    sliceCtx = createLayerContext(sliceJob, PRINTERS[sliceJob.printer]);
     const results = [];
     for (let k = k0; k < k1; k++) {
       const img = renderLayer(sliceCtx, k);
@@ -90,34 +91,55 @@ const handlers = {
     }
     return results;
   },
-  // Downsampled RGBA preview of an encoded (deflated PW0) layer
-  layerPreview({ packed, scale }) {
-    const enc = inflateSync(packed.data, { out: new Uint8Array(packed.size) });
-    const img = decodePW0(enc, M7MAX.resX, M7MAX.resY);
-    return downsample(img, M7MAX.resX, M7MAX.resY, scale);
+  // Downsampled RGBA preview of a sliced layer (.pm7m layers are deflated PW0, .goo layers raw RLE)
+  layerPreview({ packed, printer, scale }) {
+    const pr = PRINTERS[printer];
+    return downsample(unpackLayer(packed, pr), pr.resX, pr.resY, scale);
   },
-  layerCrop({ packed, x0, y0, w, h }) {
-    const enc = inflateSync(packed.data, { out: new Uint8Array(packed.size) });
-    const img = decodePW0(enc, M7MAX.resX, M7MAX.resY);
+  layerCrop({ packed, printer, x0, y0, w, h }) {
+    const pr = PRINTERS[printer];
+    const img = unpackLayer(packed, pr);
     const out = new Uint8ClampedArray(w * h * 4);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const sx = x0 + x, sy = y0 + y;
-      const v = sx >= 0 && sy >= 0 && sx < M7MAX.resX && sy < M7MAX.resY ? img[sy * M7MAX.resX + sx] : 0;
+      const v = sx >= 0 && sy >= 0 && sx < pr.resX && sy < pr.resY ? img[sy * pr.resX + sx] : 0;
       const o = (y * w + x) * 4;
       out[o] = v; out[o + 1] = v; out[o + 2] = v; out[o + 3] = 255;
     }
     return { rgba: out, w, h };
   },
-  // Open an existing .pm7m for inspection
-  openPM7M({ buffer }) {
-    openedFile = readPM7M(new Uint8Array(buffer));
-    return { layerCount: openedFile.layerCount, settings: openedFile.settings, printInfo: openedFile.printInfo, software: openedFile.software, layers: openedFile.layersController.paras };
+  // Open an existing .pm7m or .goo for inspection
+  openPrint({ buffer, name }) {
+    const u8 = new Uint8Array(buffer);
+    if (/\.goo$/i.test(name)) {
+      const g = readGOO(u8);
+      openedFile = { layerCount: g.layerCount, W: g.W, H: g.H, layerImage: g.layerImage };
+      return {
+        layerCount: g.layerCount, format: 'goo', machine: g.machine, W: g.W, H: g.H,
+        printInfo: { print_time: g.printTime }, software: g.software,
+        summary: { layerHeight: g.layerHeight, exposure: g.exposure, bottomExposure: g.bottomExposure },
+        layers: g.layers.map((l) => ({ layer_minheight: l.z - g.layerHeight, layer_thickness: g.layerHeight, exposure_time: Math.round(l.exposure * 1000) / 1000 })),
+      };
+    }
+    openedFile = readPM7M(u8);
+    const sp = openedFile.settings.machine_extern.user_resins?.[0]?.slicepara || {};
+    return {
+      layerCount: openedFile.layerCount, format: 'pm7m', machine: openedFile.settings.machine_type?.name, W: openedFile.W, H: openedFile.H,
+      printInfo: openedFile.printInfo, software: openedFile.software,
+      summary: { layerHeight: sp.zthick, exposure: sp.exposure_time, bottomExposure: sp.bott_time },
+      layers: openedFile.layersController.paras,
+    };
   },
   openedLayer({ k, scale }) {
     const img = openedFile.layerImage(k);
     return downsample(img, openedFile.W, openedFile.H, scale);
   },
 };
+
+function unpackLayer(packed, pr) {
+  if (packed.raw) return decodeGOO(packed.data, pr.resX, pr.resY);
+  return decodePW0(inflateSync(packed.data, { out: new Uint8Array(packed.size) }), pr.resX, pr.resY);
+}
 
 function downsample(img, W, H, s) {
   const w = Math.ceil(W / s), h = Math.ceil(H / s);

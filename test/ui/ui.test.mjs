@@ -17,7 +17,7 @@ const app = await electron.launch({
 });
 // stub native dialogs in the main process
 await app.evaluate(({ dialog }, p) => {
-  dialog.showSaveDialog = async (_w, opts) => ({ canceled: false, filePath: (opts.defaultPath || '').endsWith('.pm7m') ? p : `/tmp/${opts.defaultPath}` });
+  dialog.showSaveDialog = async (_w, opts) => ({ canceled: false, filePath: /\.(pm7m|goo)$/.test(opts.defaultPath || '') ? p : `/tmp/${opts.defaultPath}` });
   dialog.showMessageBox = async () => ({ response: 0 });
 }, exportPath);
 const win = await app.firstWindow();
@@ -37,6 +37,7 @@ const idle = async (timeout = 600000) => {
   }
 };
 if (lang === 'sr') await win.click('.seg button:has-text("SR")');
+if (process.env.PRINTER) { await win.selectOption('select.printer', process.env.PRINTER); await win.waitForTimeout(500); }
 await shot('01-empty');
 
 // load model as if dropped

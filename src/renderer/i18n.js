@@ -36,7 +36,7 @@ const SR = {
   'Auto-place drain holes': 'Automatske drenažne rupe', 'Model too thin to hollow at this wall thickness.': 'Model je pretanak za šupljenje ovom debljinom zida.',
   'Elevation': 'Podizanje modela', 'Model resting supports': 'Podrške na modelu', 'Margin': 'Ivica', 'Chamfer': 'Zakošenje', 'Brace diameter': 'Prečnik ukrućenja',
   'Copies': 'Kopije', 'Fit view': 'Uklopi prikaz', 'Islands found': 'Pronađena ostrva', 'No unsupported islands.': 'Nema ostrva bez podrške.',
-  'Image': 'Slika', 'Top': 'Odozgo', 'Front': 'Spreda', 'Side': 'Sa strane', 'Under': 'Odozdo', 'Slab': 'Ploča', 'all': 'sve', 'Normal layers': 'Normalni slojevi', 'Holes closed': 'Zatvorene rupe', 'Second stage, after the first lift distance:': 'Druga faza, posle prve visine podizanja:', 'Rebuild supports': 'Ponovo izgradi podrške', 'Tips and trunks': 'Vrhovi i stubovi', 'Placement': 'Raspored',
+  'Image': 'Slika', 'Printer': 'Štampač', 'Export': 'Izvezi', 'Top': 'Odozgo', 'Front': 'Spreda', 'Side': 'Sa strane', 'Under': 'Odozdo', 'Slab': 'Ploča', 'all': 'sve', 'Normal layers': 'Normalni slojevi', 'Holes closed': 'Zatvorene rupe', 'Second stage, after the first lift distance:': 'Druga faza, posle prve visine podizanja:', 'Rebuild supports': 'Ponovo izgradi podrške', 'Tips and trunks': 'Vrhovi i stubovi', 'Placement': 'Raspored',
   'Scaling removed the hollowing and drain holes; hollow the model again.': 'Skaliranje je uklonilo šupljenje i rupe; ponovo isšupljite model.', 'Estimated': 'Procena', 'Delete model': 'Obriši model', 'Hide': 'Sakrij', 'Show': 'Prikaži',
 };
 

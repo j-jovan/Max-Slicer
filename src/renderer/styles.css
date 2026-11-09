@@ -40,6 +40,7 @@ button, input, select { font: inherit; color: inherit; }
 .steps button[aria-current="step"] { background: var(--steel-3); color: var(--ink); }
 .steps button[aria-current="step"] .n { background: var(--amber); border-color: var(--amber); color: var(--amber-ink); }
 .topright { display: flex; align-items: center; gap: 8px; }
+.topright select.printer { width: 210px; height: 30px; }
 
 .btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border: 1px solid var(--line); background: var(--steel-3); border-radius: var(--r-s); cursor: pointer; white-space: nowrap; }
 .btn:hover { border-color: #4a5462; }

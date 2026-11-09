@@ -76,8 +76,14 @@ export class Viewer {
     loop();
   }
 
-  buildPlate() {
-    const W = M7MAX.displayW, H = M7MAX.displayH;
+  setPrinter(pr) {
+    if (this.plateGroup) this.scene.remove(this.plateGroup);
+    this.buildPlate(pr);
+    this.dirty = true;
+  }
+
+  buildPlate(pr = M7MAX) {
+    const W = pr.displayW, H = pr.displayH;
     const g = new THREE.Group();
     const plate = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshStandardMaterial({ color: COLORS.plate, roughness: 0.9 }));
     plate.position.z = -0.05;
@@ -87,7 +93,7 @@ export class Viewer {
     for (let y = -Math.floor(H / 2 / 10) * 10; y <= H / 2; y += 10) (y % 50 === 0 ? major : pts).push(-W / 2, y, 0, W / 2, y, 0);
     const lg = (arr, color) => { const b = new THREE.BufferGeometry(); b.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3)); return new THREE.LineSegments(b, new THREE.LineBasicMaterial({ color })); };
     g.add(lg(pts, COLORS.grid), lg(major, COLORS.gridMajor));
-    const w = M7MAX.printW / 2, h = M7MAX.printH / 2, Z = M7MAX.maxZ;
+    const w = pr.printW / 2, h = pr.printH / 2, Z = pr.maxZ;
     const box = [];
     const c = [[-w, -h], [w, -h], [w, h], [-w, h]];
     for (let i = 0; i < 4; i++) { const a = c[i], b = c[(i + 1) % 4]; box.push(a[0], a[1], 0.02, b[0], b[1], 0.02, a[0], a[1], Z, b[0], b[1], Z, a[0], a[1], 0.02, a[0], a[1], Z); }
@@ -262,7 +268,7 @@ export class Viewer {
   }
 
   // Render a PNG preview (for the print file) from an iso camera framing everything.
-  async renderPreview(w, h) {
+  async renderPreview(w, h, rgba = false) {
     const canvas = document.createElement('canvas');
     canvas.width = w; canvas.height = h;
     const r = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -284,10 +290,23 @@ export class Viewer {
     const clip = this.clipPlane.constant;
     this.clipPlane.constant = 1e6;
     const prevBg = this.scene.background;
+    // the thumbnail always shows solid models, whatever the current view mode
+    const saved = [...this.objects.values()].map((o) => [o, o.mesh.material, o.cavity?.visible]);
+    for (const [o] of saved) { o.mesh.material = this.matModel; if (o.cavity) o.cavity.visible = false; }
     r.render(this.scene, cam);
+    for (const [o, mat, cv] of saved) { o.mesh.material = mat; if (o.cavity) o.cavity.visible = cv; }
     hidden.forEach((x, i) => (x.visible = prevVis[i]));
     this.clipPlane.constant = clip;
     this.scene.background = prevBg;
+    if (rgba) {
+      const c2 = document.createElement('canvas');
+      c2.width = w; c2.height = h;
+      const g = c2.getContext('2d');
+      g.drawImage(canvas, 0, 0);
+      const data = new Uint8Array(g.getImageData(0, 0, w, h).data.buffer);
+      r.dispose();
+      return { rgba: data, w, h };
+    }
     const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
     r.dispose();
     return new Uint8Array(await blob.arrayBuffer());
