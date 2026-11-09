@@ -1,0 +1,89 @@
+{
+  "name": "max-slicer",
+  "version": "1.0.0",
+  "description": "Resin slicer for the Anycubic Photon Mono M7 Max",
+  "main": "src/main/main.js",
+  "scripts": {
+    "test": "node test/run-all.js",
+    "build": "node build.mjs",
+    "start": "node build.mjs && electron .",
+    "dist:win": "node build.mjs && electron-builder --win --x64 --publish never"
+  },
+  "keywords": [],
+  "author": "Jovan Jovanovic",
+  "license": "UNLICENSED",
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.24.0",
+    "playwright-core": "^1.48.2",
+    "fflate": "^0.8.2",
+    "three": "^0.169.0"
+  },
+  "productName": "Max Slicer",
+  "type": "module",
+  "build": {
+    "appId": "rs.jovanovic.m7maxslicer",
+    "productName": "Max Slicer",
+    "copyright": "Jovan Jovanović",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "src/main/**",
+      "assets/icon.png",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": true,
+      "fileAssociations": [
+        {
+          "ext": "pm7m",
+          "name": "Photon Mono M7 Max print file",
+          "description": "Anycubic Photon Mono M7 Max print file"
+        },
+        {
+          "ext": "m7proj",
+          "name": "Max Slicer project"
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Max Slicer",
+      "artifactName": "Max-Slicer-Setup-${version}.exe",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico"
+    },
+    "portable": {
+      "artifactName": "Max-Slicer-Portable-${version}.exe"
+    },
+    "publish": null,
+    "linux": {
+      "target": [
+        "dir"
+      ]
+    }
+  }
+}

@@ -1,0 +1,46 @@
+// English is the key; Serbian (Latin) translations below.
+const SR = {
+  'Open': 'Otvori', 'Add model': 'Dodaj model', 'Save project': 'Sačuvaj projekat', 'Open project': 'Otvori projekat',
+  'Export .pm7m': 'Izvezi .pm7m', 'Export STL': 'Izvezi STL', 'Undo': 'Poništi', 'Redo': 'Ponovi',
+  'Prepare': 'Priprema', 'Hollow': 'Šupljenje', 'Supports': 'Podrške', 'Slice': 'Sečenje',
+  'Models': 'Modeli', 'No models yet': 'Još nema modela', 'Open an STL, OBJ or 3MF file, or drop it on the plate.': 'Otvorite STL, OBJ ili 3MF fajl, ili ga prevucite na ploču.',
+  'Position': 'Pozicija', 'Rotation': 'Rotacija', 'Scale': 'Razmera', 'Size': 'Dimenzije', 'Uniform': 'Uniformno',
+  'Move': 'Pomeri', 'Rotate': 'Rotiraj', 'Mirror X': 'Ogledalo X', 'Mirror Y': 'Ogledalo Y', 'Mirror Z': 'Ogledalo Z',
+  'Drop to plate': 'Spusti na ploču', 'Center': 'Centriraj', 'Arrange': 'Rasporedi', 'Duplicate': 'Dupliraj', 'Delete': 'Obriši',
+  'Lay flat on face': 'Položi na stranu', 'Click a face of the model to place it on the plate.': 'Kliknite stranu modela da je spustite na ploču.',
+  'Auto-orient': 'Automatska orijentacija', 'Goal': 'Cilj', 'Balanced': 'Uravnoteženo', 'Fewer supports': 'Manje podrški', 'Lower height (faster)': 'Manja visina (brže)', 'Less peel force': 'Manja sila odvajanja',
+  'Mesh': 'Mreža', 'Triangles': 'Trouglovi', 'Volume': 'Zapremina', 'Repaired': 'Popravljeno', 'Open edges': 'Otvorene ivice',
+  'Wall thickness': 'Debljina zida', 'Infill': 'Ispuna', 'None': 'Bez', 'Cubic lattice': 'Kubna rešetka', 'Gyroid': 'Žiroid', 'Spacing': 'Razmak', 'Thickness': 'Debljina',
+  'Hollow model': 'Isšupljiti model', 'Remove hollowing': 'Ukloni šupljenje', 'Show cavity': 'Prikaži šupljinu',
+  'Drain holes': 'Drenažne rupe', 'Add drain hole': 'Dodaj drenažnu rupu', 'Click the model where the hole should go.': 'Kliknite na model gde treba rupa.', 'Diameter': 'Prečnik', 'Depth': 'Dubina',
+  'Check suction & trapped resin': 'Proveri vakuum i zarobljenu smolu', 'Suction cup': 'Vakuum (pijavica)', 'Trapped resin': 'Zarobljena smola', 'No suction cups or trapped resin found.': 'Nema vakuum zona ni zarobljene smole.',
+  'Preset': 'Profil', 'Light': 'Lake', 'Medium': 'Srednje', 'Heavy': 'Teške',
+  'Tip diameter': 'Prečnik vrha', 'Tip length': 'Dužina vrha', 'Contact depth': 'Dubina kontakta', 'Trunk diameter': 'Prečnik stuba', 'Base diameter': 'Prečnik osnove',
+  'Overhang angle': 'Ugao prepusta', 'Density': 'Gustina', 'Lift height': 'Visina podizanja', 'Raft': 'Splav', 'Raft height': 'Visina splava', 'Braces': 'Ukrućenja',
+  'Auto-support': 'Automatske podrške', 'Clear supports': 'Obriši podrške', 'Add supports': 'Dodaj podrške', 'Remove supports': 'Ukloni podrške', 'Check islands': 'Proveri ostrva',
+  'Click the model to add a support.': 'Kliknite model da dodate podršku.', 'Click a support to remove it.': 'Kliknite podršku da je uklonite.',
+  'Resin profile': 'Profil smole', 'Layer height': 'Visina sloja', 'Bottom layers': 'Donji slojevi', 'Bottom exposure': 'Ekspozicija donjih', 'Exposure': 'Ekspozicija', 'Transition layers': 'Prelazni slojevi',
+  'Waits': 'Čekanja', 'Before cure': 'Pre osvetljavanja', 'After cure': 'Posle osvetljavanja', 'After lift': 'Posle podizanja',
+  'Lift': 'Podizanje', 'Lift speed': 'Brzina podizanja', 'Retract speed': 'Brzina spuštanja', 'Bottom lift': 'Podizanje donjih', 'Two-stage motion': 'Dvostepeno kretanje', 'Stage 2': 'Faza 2',
+  'Anti-aliasing': 'Anti-aliasing', 'Off': 'Isključeno', 'Blur': 'Zamućenje', 'Material': 'Materijal', 'Price per litre': 'Cena po litru', 'Currency': 'Valuta', 'Density g/ml': 'Gustina g/ml',
+  'Slice plate': 'Iseci ploču', 'Cancel': 'Otkaži', 'Layers': 'Slojevi', 'Print time': 'Vreme štampe', 'Resin': 'Smola', 'Cost': 'Cena',
+  'Layer': 'Sloj', 'Save profile': 'Sačuvaj profil', 'New profile': 'Novi profil', 'Delete profile': 'Obriši profil', 'Profile name': 'Ime profila',
+  'Warnings': 'Upozorenja', 'Outside the build area': 'Van radne površine', 'Too tall for the printer': 'Previsoko za štampač', 'Unsupported islands': 'Ostrva bez podrške', 'Model sits below the plate': 'Model je ispod ploče',
+  'Ready': 'Spremno', 'Slicing…': 'Sečenje…', 'Saved': 'Sačuvano', 'Working…': 'Radim…', 'Done': 'Gotovo',
+  'Select a model first.': 'Prvo izaberite model.', 'Slice the plate first.': 'Prvo isecite ploču.', 'Nothing to slice: the plate is empty.': 'Nema šta da se seče: ploča je prazna.',
+  'Supports will be removed because the model was rotated or scaled.': 'Podrške će biti uklonjene jer je model rotiran ili skaliran.',
+  'Unsaved changes': 'Nesačuvane izmene', 'Quit without saving?': 'Izaći bez čuvanja?', 'Quit': 'Izađi',
+  'Open print file': 'Otvori fajl za štampu', 'Print file': 'Fajl za štampu', 'Language': 'Jezik', 'X-ray': 'Rendgen', 'Layer view': 'Prikaz slojeva',
+  'All models': 'Svi modeli', 'Selected model': 'Izabrani model', 'Apply to': 'Primeni na', 'Supports: ': 'Podrške: ', 'failed to route': 'nije moguće postaviti',
+  'Exported': 'Izvezeno', 'Show in folder': 'Prikaži u folderu', 'Hollowing removes resin from inside the model. Add at least one drain hole near the plate side.': 'Šupljenje uklanja smolu iz unutrašnjosti. Dodajte bar jednu drenažnu rupu blizu ploče.',
+  'Auto-place drain holes': 'Automatske drenažne rupe', 'Model too thin to hollow at this wall thickness.': 'Model je pretanak za šupljenje ovom debljinom zida.',
+  'Elevation': 'Podizanje modela', 'Model resting supports': 'Podrške na modelu', 'Margin': 'Ivica', 'Chamfer': 'Zakošenje', 'Brace diameter': 'Prečnik ukrućenja',
+  'Copies': 'Kopije', 'Fit view': 'Uklopi prikaz', 'Islands found': 'Pronađena ostrva', 'No unsupported islands.': 'Nema ostrva bez podrške.',
+  'Image': 'Slika', 'Top': 'Odozgo', 'Front': 'Spreda', 'Side': 'Sa strane', 'Under': 'Odozdo', 'Slab': 'Ploča', 'all': 'sve', 'Normal layers': 'Normalni slojevi', 'Holes closed': 'Zatvorene rupe', 'Second stage, after the first lift distance:': 'Druga faza, posle prve visine podizanja:', 'Rebuild supports': 'Ponovo izgradi podrške', 'Tips and trunks': 'Vrhovi i stubovi', 'Placement': 'Raspored',
+  'Scaling removed the hollowing and drain holes; hollow the model again.': 'Skaliranje je uklonilo šupljenje i rupe; ponovo isšupljite model.', 'Estimated': 'Procena', 'Delete model': 'Obriši model', 'Hide': 'Sakrij', 'Show': 'Prikaži',
+};
+
+let lang = 'en';
+export function setLang(l) { lang = l === 'sr' ? 'sr' : 'en'; }
+export function getLang() { return lang; }
+export function t(s) { return lang === 'sr' && SR[s] ? SR[s] : s; }
